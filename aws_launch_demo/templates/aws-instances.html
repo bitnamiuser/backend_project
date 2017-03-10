@@ -1,0 +1,84 @@
+{% load static %}
+<html>
+ <head>
+  <style>
+    /* Without react components or similar, it's simplest to set semantic class
+     * of the instance state, and use that to update visibility of items. */
+    tr td.instance_link { visibility: hidden; }
+    tr.running td.instance_link { visibility: visible; }
+    tr td.instance_terminate { visibility: hidden; }
+    tr.running td.instance_terminate { visibility: visible; }
+    tr td.spinner { visibility: visible; }
+    tr.running td.spinner { visibility: hidden; }
+    tr.terminated td.spinner { visibility: hidden; }
+  </style>
+
+  <script>
+    /* Simple XHR poll - would be nice to use a websocket rather than polling */
+    setInterval(function() {
+      var xhr = new XMLHttpRequest();
+      xhr.open("GET", "{% url 'manage-instances' %}", true);
+      xhr.setRequestHeader("Accept", "application/json");
+      xhr.onload = function (e) {
+        if (xhr.readyState === 4) {
+          if (xhr.status === 200) {
+            var instances = JSON.parse(xhr.responseText).instances;
+            instances.forEach(function(instance) {
+              var instance_row = document.getElementById(instance.id);
+              instance_row.className = instance.state;
+              instance_row.getElementsByClassName("state")[0].textContent = instance.state;
+              var link = instance_row.getElementsByClassName("instance_link")[0];
+              link.innerHTML = '<a href="http://' + instance.dns + '">' + instance.dns + '</a>';
+            });
+            console.log(xhr.responseText);
+          } else {
+            console.error(xhr.statusText);
+          }
+        }
+      };
+      xhr.onerror = function (e) {
+        console.error(xhr.statusText);
+      };
+      xhr.send(null);
+    }, 3000);
+  </script>
+
+ </head>
+ <body>
+  <h2>Current instances</h2>
+  {% if instances %}
+  <table>
+    <tr>
+      <th></th>
+      <th>Instance ID</th>
+      <th>Status</th>
+      <th>Public Address</th>
+      <th></th>
+    </tr>
+    {% for instance in instances %}
+    <tr id="{{ instance.id }}" class="{{ instance.state }}">
+        <td class="spinner"><img src="{% static 'aws_launch_demo/spinner.gif' %}"></td>
+        <td>{{ instance.id }}</td>
+        <td class="state">{{ instance.state }}</td>
+        <td class="instance_link">
+            <a href="http://{{ instance.public_dns_name }}">{{ instance.public_dns_name }}</a>
+        </td>
+        <td class="instance_terminate">
+            <form method="post" action="{% url 'manage-instances' %}">
+                {% csrf_token %}
+                <input type="hidden" name="instance_id" value="{{ instance.id }}" />
+                <input type="submit" name="terminate_instance" value="Terminate instance" />
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+    <p>You don't currently have any ec2 instances.</p>
+  {% endif %}
+  <form method="post" action="{% url 'manage-instances' %}">
+      {% csrf_token %}
+      <input type="submit" name="run_instance" value="Create Wordpress instance" />
+  </form>
+ </body>
+</html>
