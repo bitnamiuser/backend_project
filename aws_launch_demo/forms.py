@@ -1,6 +1,7 @@
 from django import forms
 
 from boto.ec2 import connect_to_region
+from boto.exception import EC2ResponseError
 
 
 class AWSCredentials(forms.Form):
@@ -13,16 +14,16 @@ class AWSCredentials(forms.Form):
         """Verify provided credentials."""
         cleaned_data = super(AWSCredentials, self).clean()
 
-        conn = connect_to_region(
-            'us-west-2',
-            aws_access_key_id=cleaned_data['access_key'],
-            aws_secret_access_key=cleaned_data['secret_key'])
-
         try:
+            conn = connect_to_region(
+                'us-west-2',
+                aws_access_key_id=cleaned_data['access_key'],
+                aws_secret_access_key=cleaned_data['secret_key'])
+
             # Validate the credentials by attempting to create a secgroup
             wordpress = conn.create_security_group('wordpressdemo', 'Access to frontend http')
             wordpress.authorize(ip_protocol='tcp', from_port=80, to_port=80, cidr_ip='0.0.0.0/0')
-        except conn.ResponseError as e:
+        except EC2ResponseError as e:
             # An Duplicate error here means the creds could be used to attempt
             # the secgroup creation.
             if e.error_code not in ('InvalidPermission.Duplicate', 'InvalidGroup.Duplicate'):
